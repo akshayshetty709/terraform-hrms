@@ -1,0 +1,9 @@
+aws_region       = "ap-south-1"
+project_name     = "hrms-backend"
+key_name         = "your-existing-key-pair-name"
+allowed_ssh_cidr = "0.0.0.0/0" # replace with your IP, e.g. "203.0.113.5/32"
+
+instance_type    = "t3.xlarge"
+root_volume_size = 100
+
+app_ports = [8080, 3000, 5050]
