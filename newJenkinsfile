@@ -8,6 +8,7 @@ pipeline {
                 sshagent(['hrms-key']) {
                     withCredentials([file(credentialsId: 'hrms-env', variable: 'ENV_FILE')]) {
                     sh '''
+                        ssh -o StrictHostKeyChecking=no ubuntu@3.109.36.186 "rm -f /home/ubuntu/.env.tmp"
                         scp -o StrictHostKeyChecking=no "$ENV_FILE" ubuntu@3.109.36.186:/home/ubuntu/.env.tmp
                         ssh -A \
                           -o StrictHostKeyChecking=no \
@@ -17,13 +18,13 @@ pipeline {
                           ubuntu@3.109.36.186 "
                             set -e
                             rm -rf /home/ubuntu/Backend
-                            git clone -b umapathy git@github.com:HRMsOwn/Backend.git /home/ubuntu/Backend
+                            git clone -b anurag-devops git@github.com:HRMsOwn/Backend.git /home/ubuntu/Backend
                             cd /home/ubuntu/Backend
                             docker compose down || true
                             docker system prune -f
-                            mv /home/ubuntu/.env.tmp .env
-                            docker compose up -d
-            
+                            mv -f /home/ubuntu/.env.tmp .env
+                            chmod 600 .env
+                            docker compose up -d --build
                         "
                     '''
                     }
