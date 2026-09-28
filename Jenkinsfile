@@ -6,7 +6,9 @@ pipeline {
         stage('Deploy to EC2') {
             steps {
                 sshagent(['hrms-key']) {
+                    withCredentials([file(credentialsId: 'hrms-env', variable: 'ENV_FILE')]) {
                     sh '''
+                        scp -o StrictHostKeyChecking=no "$ENV_FILE" ubuntu@3.109.36.186:/home/ubuntu/.env.tmp
                         ssh -A \
                           -o StrictHostKeyChecking=no \
                           -o ServerAliveInterval=30 \
@@ -14,23 +16,17 @@ pipeline {
                           -o ConnectTimeout=30 \
                           ubuntu@3.109.36.186 "
                             set -e
-                            
                             rm -rf /home/ubuntu/Backend
- 
-                           
-                            git clone -b main git@github.com:HRMsOwn/Backend.git /home/ubuntu/Backend
- 
+                            git clone -b umapathy git@github.com:HRMsOwn/Backend.git /home/ubuntu/Backend
                             cd /home/ubuntu/Backend
- 
-                           
                             docker compose down || true
                             docker system prune -f
- 
-                            
+                            mv /home/ubuntu/.env.tmp .env
                             docker compose up -d
             
                         "
                     '''
+                    }
                 }
             }
         }
