@@ -1,0 +1,467 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: hrms_zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "22181:2181"
+    networks:
+      - hrms_network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: hrms_kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - hrms_network
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    container_name: hrms_schema_registry
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8082
+    ports:
+      - "8082:8082"
+    networks:
+      - hrms_network
+
+  postgres:
+    image: postgres:15
+    container_name: hrms_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASS}
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - hrms_network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: hrms_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@hrms.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "9000:80"
+    networks:
+      - hrms_network
+    depends_on:
+      - postgres
+
+  redis:
+    image: redis:7
+    container_name: hrms_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - hrms_network
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: hrms_api_gateway
+    restart: on-failure
+    depends_on:
+      - kafka
+      - employee-service
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - KAFKA_BROKERS=kafka:9092
+      - EMPLOYEE_SERVICE_TOPIC=get-employee
+    ports:
+      - "3000:3000"
+    networks:
+      - hrms_network
+
+  employee-service:
+    build:
+      context: ./services/employee-service
+      dockerfile: Dockerfile
+    container_name: hrms_employee_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - DATABASE_URL=${DATABASE_URL}
+      - PG_DB=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3001
+    networks:
+      - hrms_network
+    ports:
+      - "3001:3001"
+
+  attendance-service:
+    build:
+      context: ./services/attendance-service
+      dockerfile: Dockerfile
+    container_name: hrms_attendance_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - DATABASE_URL=${DATABASE_URL}
+      - PG_DB=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3002
+    networks:
+      - hrms_network
+    ports:
+      - "3002:3002"
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: hrms_auth_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - DATABASE_URL=${DATABASE_URL}
+      - PG_DB=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3003
+    networks:
+      - hrms_network
+    ports:
+      - "3003:3003"
+
+  leave-service:
+    build:
+      context: ./services/leave-service
+      dockerfile: Dockerfile
+    container_name: hrms_leave_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - DATABASE_URL=${DATABASE_URL}
+      - PG_DB=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3004
+    networks:
+      - hrms_network
+    ports:
+      - "3004:3004"
+
+  payroll-service:
+    build:
+      context: ./services/payroll-service
+      dockerfile: Dockerfile
+    container_name: hrms_payroll_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - DATABASE_URL=${DATABASE_URL}
+      - PG_DB=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3005
+    networks:
+      - hrms_network
+    ports:
+      - "3005:3005"
+
+  recruitment-service:
+    build:
+      context: ./services/recruitment-service
+      dockerfile: Dockerfile
+    container_name: hrms_recruitment_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - DATABASE_URL=${DATABASE_URL}
+      - PG_DB=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3006
+    networks:
+      - hrms_network
+    ports:
+      - "3006:3006"
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: hrms_notification_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - DATABASE_URL=${DATABASE_URL}
+      - PG_DB=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3008
+    networks:
+      - hrms_network
+    ports:
+      - "3008:3008"
+
+  ticket-service:
+    build:
+      context: ./services/ticket-service
+      dockerfile: Dockerfile
+    container_name: hrms_ticket_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - DATABASE_URL=${DATABASE_URL}
+      - PG_DB=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3011
+    networks:
+      - hrms_network
+    ports:
+      - "3011:3011"
+
+  tenant-service:
+    build:
+      context: ./services/tenant-service
+      dockerfile: Dockerfile
+    container_name: hrms_tenant_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - DATABASE_URL=${DATABASE_URL}
+      - PG_DB=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3010
+    networks:
+      - hrms_network
+    ports:
+      - "3010:3010"
+
+  shift-service:
+    build:
+      context: ./services/shift-service
+      dockerfile: Dockerfile
+    container_name: hrms_shift_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - DATABASE_URL=${DATABASE_URL}
+      - PG_DB=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3009
+    networks:
+      - hrms_network
+    ports:
+      - "3009:3009"
+
+  exit-service:
+    build:
+      context: ./services/exit-service
+      dockerfile: Dockerfile
+    container_name: hrms_exit_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - DATABASE_URL=${DATABASE_URL}
+      - PG_DB=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3012
+    networks:
+      - hrms_network
+    ports:
+      - "3012:3012"
+
+  asset-service:
+    build:
+      context: ./services/asset-service
+      dockerfile: Dockerfile
+    container_name: hrms_asset_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - DATABASE_URL=${DATABASE_URL}
+      - PG_DB=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3013
+    networks:
+      - hrms_network
+    ports:
+      - "3013:3013"
+
+  payment-service:
+    build:
+      context: ./services/payment-service
+      dockerfile: Dockerfile
+    container_name: hrms_payment_service
+    restart: on-failure
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=5432
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_SSL=true
+      - PG_DB=postgres
+      - PORT=3014
+      - TENANT_SERVICE_URL=http://hrms_tenant_service:3010
+      - AUTH_SERVICE_URL=http://hrms_auth_service:3003
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-rzp_test_enterprise_hrms}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-rzp_secret_enterprise_hrms}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET:-rzp_webhook_secret_enterprise}
+    networks:
+      - hrms_network
+    ports:
+      - "3014:3014"
+
+volumes:
+  postgres_data:
+  mongo_data:
+
+networks:
+  hrms_network:
+    driver: bridge
