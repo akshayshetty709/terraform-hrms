@@ -1,0 +1,48 @@
+pipeline{
+    agent any
+ 
+    environment{
+        S3_BUCKET='hrms-project-1'
+        DISTRIBUTION_ID='E3EJT9XHW5Q97C'
+    }
+ 
+    stages{
+        stage('checkout'){
+            steps{
+                git branch:'anurag-devops', credentialsId:'crm_git', url:'https://github.com/HRMsOwn/HR_Panel.git'
+            }
+        }
+ 
+        stage('install dependendies'){
+            steps{
+                sh "npm install --legacy-peer-deps"
+            }
+        }
+ 
+        stage('Build') {
+            steps {
+                withCredentials([file(credentialsId: 'env-hrms-frontend', variable: 'ENV_FILE')]) {
+                    sh 'touch .env && chmod 666 .env || true'
+                    sh 'cp "$ENV_FILE" .env'
+                    sh 'npm run build'
+                }
+            }
+        }
+ 
+        stage('move static file to s3 bucket'){
+            steps{
+                withCredentials([[$class:'AmazonWebServicesCredentialsBinding', credentialsId:'aws_crm_cred']]){
+                sh "aws s3 sync dist/ s3://${S3_BUCKET} --delete"
+                }
+            }
+        }
+ 
+        stage('invalidate cloudfront cache'){
+            steps{
+                withCredentials([[$class:'AmazonWebServicesCredentialsBinding', credentialsId:'aws_crm_cred']]){
+                sh "aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths '/*'"
+                }
+            }
+        }
+    }
+}
